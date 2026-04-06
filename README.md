@@ -82,6 +82,18 @@ corepack pnpm prisma:seed
 - `compose.ci.yaml`: CI smoke stack with fixed host ports
 - `compose.prod.yaml`: image-based deployment plus Nginx gateway
 
+## Production Notes
+
+- `deploy-prod.yml` is a manual GitHub Actions workflow protected by the `production` Environment.
+- `compose.prod.yaml` exposes Nginx on `HTTP_PORT`, which defaults to `80`.
+- If you deploy staging and production on the same VPS, use different deploy paths and different host ports.
+- Example:
+  - staging path: `/opt/taskflow`
+  - production path: `/opt/taskflow-prod`
+  - staging `HTTP_PORT=80`
+  - production `HTTP_PORT=8080`
+- If you later buy a second VPS for production, keep `HTTP_PORT=80` there and the rest of the deployment flow can stay the same.
+
 ## Next Learning Steps
 
 1. Replace scaffolded API responses with Prisma-powered persistence.
