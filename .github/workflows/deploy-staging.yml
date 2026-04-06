@@ -25,6 +25,7 @@ jobs:
 
       - name: Configure SSH key
         run: |
+          mkdir -p ~/.ssh
           install -m 600 /dev/null ~/.ssh/id_ed25519
           printf '%s\n' "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_ed25519
           ssh-keyscan -H "${{ secrets.STAGING_HOST }}" >> ~/.ssh/known_hosts
@@ -43,4 +44,3 @@ jobs:
             "cd '${{ secrets.STAGING_DEPLOY_PATH }}' && \
             export GHCR_OWNER='${{ env.OWNER_LC }}' IMAGE_TAG='sha-${{ github.event.workflow_run.head_sha }}' && \
             ./infra/scripts/deploy.sh"
-
