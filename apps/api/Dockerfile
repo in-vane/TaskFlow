@@ -20,15 +20,9 @@ RUN corepack pnpm install --frozen-lockfile=false && corepack pnpm prisma genera
 COPY . .
 RUN corepack pnpm --filter @taskflow/shared-types build && corepack pnpm --filter @taskflow/api build
 
-FROM node:22-alpine AS runner
-WORKDIR /app
-RUN corepack enable
-COPY package.json pnpm-workspace.yaml ./
-COPY apps/api/package.json apps/api/package.json
-COPY packages/shared-types/package.json packages/shared-types/package.json
-COPY prisma prisma
-RUN corepack pnpm install --prod --frozen-lockfile=false && corepack pnpm prisma generate --schema prisma/schema.prisma
-COPY --from=builder /workspace/apps/api/dist apps/api/dist
-COPY --from=builder /workspace/packages/shared-types/dist packages/shared-types/dist
+FROM builder AS runner
+ENV NODE_ENV=production
+ENV CI=true
+RUN corepack pnpm prune --prod
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]
