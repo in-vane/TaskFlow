@@ -22,11 +22,13 @@ http_check() {
 
 attempt=1
 while [ "$attempt" -le "$RETRIES" ]; do
-  if http_check "$BASE_URL/api/health/ready"; then
+  status=0
+  http_check "$BASE_URL/api/health/ready" || status=$?
+
+  if [ "$status" -eq 0 ]; then
     echo "Healthcheck passed on attempt $attempt"
     exit 0
   fi
-  status=$?
 
   if [ "$status" -eq 127 ]; then
     exit 1
