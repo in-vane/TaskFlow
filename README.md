@@ -85,6 +85,7 @@ corepack pnpm prisma:seed
 ## Production Notes
 
 - `deploy-prod.yml` is a manual GitHub Actions workflow protected by the `production` Environment.
+- `rollback-prod.yml` is a manual GitHub Actions workflow that reuses the same production approval gate.
 - `compose.prod.yaml` exposes Nginx on `HTTP_PORT`, which defaults to `80`.
 - If you deploy staging and production on the same VPS, use different deploy paths and different host ports.
 - Example:
@@ -93,6 +94,19 @@ corepack pnpm prisma:seed
   - staging `HTTP_PORT=80`
   - production `HTTP_PORT=8080`
 - If you later buy a second VPS for production, keep `HTTP_PORT=80` there and the rest of the deployment flow can stay the same.
+
+## Release And Rollback
+
+- Production release:
+  - Run `Build and Publish Images` on `main`
+  - Copy the full commit SHA
+  - Run `Deploy Production` with `image_tag=sha-<full-commit-sha>`
+- Production rollback:
+  - Pick a previously published image tag in the same `sha-<full-commit-sha>` format
+  - Run `Rollback Production` with `previous_image_tag=sha-<full-commit-sha>`
+- Helpful command:
+  - `git log --format='%H %s' -n 10`
+  - Use this to map a full commit SHA to the release you want to restore
 
 ## Next Learning Steps
 
