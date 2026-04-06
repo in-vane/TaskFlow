@@ -35,7 +35,7 @@ jobs:
           rsync -az \
             compose.yaml \
             compose.prod.yaml \
-            infra/ \
+            infra \
             "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ secrets.STAGING_DEPLOY_PATH }}/"
 
       - name: Deploy to staging
