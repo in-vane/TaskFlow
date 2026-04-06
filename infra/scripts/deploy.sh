@@ -15,6 +15,7 @@ COMPOSE="$(compose_cmd)"
 
 echo "Deploying TaskFlow with image tag $IMAGE_TAG"
 $COMPOSE -f compose.yaml -f compose.prod.yaml pull api worker frontend
-$COMPOSE -f compose.yaml -f compose.prod.yaml up -d --no-build db redis api worker frontend nginx
+$COMPOSE -f compose.yaml -f compose.prod.yaml up -d --no-build db redis
+$COMPOSE -f compose.yaml -f compose.prod.yaml run --rm api sh -lc "until corepack pnpm prisma:deploy; do echo 'Waiting for database to be ready...'; sleep 3; done"
+$COMPOSE -f compose.yaml -f compose.prod.yaml up -d --no-build api worker frontend nginx
 "$SCRIPT_DIR/healthcheck.sh"
-

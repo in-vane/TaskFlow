@@ -23,6 +23,5 @@ RUN corepack pnpm --filter @taskflow/shared-types build && corepack pnpm --filte
 FROM builder AS runner
 ENV NODE_ENV=production
 ENV CI=true
-RUN corepack pnpm prune --prod
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]
