@@ -22,6 +22,8 @@ import type {
   TaskStatusFilter
 } from "./lib/app-utils";
 
+type AuthMode = "login" | "register";
+
 interface MePayload {
   id: string;
   email: string;
@@ -195,6 +197,20 @@ async function loginRequest(credentials: {
   });
 }
 
+async function registerRequest(payload: {
+  displayName: string;
+  email: string;
+  password: string;
+}): Promise<AuthSession> {
+  return requestJson("/api/auth/register", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
 async function logoutRequest(refreshToken: string) {
   return requestJson<{ success: boolean }>("/api/auth/logout", {
     method: "POST",
@@ -296,9 +312,15 @@ export default function App() {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [loginForm, setLoginForm] = useState({
     email: "demo@taskflow.local",
     password: "taskflow123"
+  });
+  const [registerForm, setRegisterForm] = useState({
+    displayName: "",
+    email: "",
+    password: ""
   });
   const [projectForm, setProjectForm] = useState({
     name: "",
@@ -415,15 +437,34 @@ export default function App() {
   };
   const boardCompletion =
     boardSnapshot.total === 0 ? 0 : Math.round((boardSnapshot.done / boardSnapshot.total) * 100);
+  const completeAuth = (nextSession: AuthSession) => {
+    startTransition(() => {
+      setSession(nextSession);
+      setAuthMode("login");
+    });
+    persistSession(nextSession);
+    queryClient.invalidateQueries({ queryKey: ["me"] });
+    queryClient.invalidateQueries({ queryKey: ["projects"] });
+  };
   const loginMutation = useMutation({
     mutationFn: loginRequest,
+    onSuccess: completeAuth
+  });
+  const registerMutation = useMutation({
+    mutationFn: registerRequest,
     onSuccess: (nextSession) => {
+      completeAuth(nextSession);
       startTransition(() => {
-        setSession(nextSession);
+        setLoginForm({
+          email: nextSession.user.email,
+          password: ""
+        });
+        setRegisterForm({
+          displayName: "",
+          email: "",
+          password: ""
+        });
       });
-      persistSession(nextSession);
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
     }
   });
   const createProjectMutation = useMutation({
@@ -914,66 +955,187 @@ export default function App() {
 
         <article className="panel">
           <div className="panel__header">
-            <h2>{session ? "Workspace" : "Sign In"}</h2>
+            <h2>
+              {session
+                ? "Workspace"
+                : authMode === "register"
+                  ? "Create Account"
+                  : "Sign In"}
+            </h2>
             <span>
-              {session ? (selectedProject ? selectedProject.key : "Choose a project") : "Protected API"}
+              {session
+                ? selectedProject
+                  ? selectedProject.key
+                  : "Choose a project"
+                : authMode === "register"
+                  ? "POST /api/auth/register"
+                  : "Protected API"}
             </span>
           </div>
           <div className="stack">
             {!session ? (
               <>
-                <p className="empty-state">
-                  Use the seeded demo account to test the auth flow end to end.
-                </p>
-                <form
-                  className="auth-form"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    loginMutation.mutate(loginForm);
-                  }}
-                >
-                  <label className="field">
-                    <span>Email</span>
-                    <input
-                      className="input"
-                      value={loginForm.email}
-                      onChange={(event) =>
-                        setLoginForm((current) => ({
-                          ...current,
-                          email: event.target.value
-                        }))
-                      }
-                      autoComplete="email"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Password</span>
-                    <input
-                      className="input"
-                      type="password"
-                      value={loginForm.password}
-                      onChange={(event) =>
-                        setLoginForm((current) => ({
-                          ...current,
-                          password: event.target.value
-                        }))
-                      }
-                      autoComplete="current-password"
-                    />
-                  </label>
+                <div className="auth-toggle" role="tablist" aria-label="Authentication mode">
                   <button
-                    className="button button--primary"
-                    type="submit"
-                    disabled={loginMutation.isPending}
+                    className={`auth-toggle__button ${
+                      authMode === "login" ? "auth-toggle__button--active" : ""
+                    }`}
+                    type="button"
+                    role="tab"
+                    aria-selected={authMode === "login"}
+                    onClick={() => {
+                      loginMutation.reset();
+                      registerMutation.reset();
+                      setAuthMode("login");
+                    }}
                   >
-                    {loginMutation.isPending ? "Signing in..." : "Sign In"}
+                    Sign In
                   </button>
-                  {loginMutation.isError ? (
-                    <p className="form-message form-message--error">
-                      {(loginMutation.error as Error).message}
-                    </p>
-                  ) : null}
-                </form>
+                  <button
+                    className={`auth-toggle__button ${
+                      authMode === "register" ? "auth-toggle__button--active" : ""
+                    }`}
+                    type="button"
+                    role="tab"
+                    aria-selected={authMode === "register"}
+                    onClick={() => {
+                      loginMutation.reset();
+                      registerMutation.reset();
+                      setAuthMode("register");
+                    }}
+                  >
+                    Create Account
+                  </button>
+                </div>
+                <p className="empty-state">
+                  {authMode === "login"
+                    ? "Sign in with an existing account. If this environment does not include seed data, create an account first."
+                    : "Create your first account here. Registration returns a session immediately, so you can continue straight into the workspace."}
+                </p>
+                {authMode === "login" ? (
+                  <form
+                    className="auth-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      loginMutation.mutate(loginForm);
+                    }}
+                  >
+                    <label className="field">
+                      <span>Email</span>
+                      <input
+                        className="input"
+                        value={loginForm.email}
+                        onChange={(event) =>
+                          setLoginForm((current) => ({
+                            ...current,
+                            email: event.target.value
+                          }))
+                        }
+                        autoComplete="email"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Password</span>
+                      <input
+                        className="input"
+                        type="password"
+                        value={loginForm.password}
+                        onChange={(event) =>
+                          setLoginForm((current) => ({
+                            ...current,
+                            password: event.target.value
+                          }))
+                        }
+                        autoComplete="current-password"
+                      />
+                    </label>
+                    <button
+                      className="button button--primary"
+                      type="submit"
+                      disabled={loginMutation.isPending}
+                    >
+                      {loginMutation.isPending ? "Signing in..." : "Sign In"}
+                    </button>
+                    {loginMutation.isError ? (
+                      <p className="form-message form-message--error">
+                        {(loginMutation.error as Error).message}
+                      </p>
+                    ) : null}
+                  </form>
+                ) : (
+                  <form
+                    className="auth-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      registerMutation.mutate({
+                        displayName: registerForm.displayName.trim(),
+                        email: registerForm.email.trim(),
+                        password: registerForm.password
+                      });
+                    }}
+                  >
+                    <label className="field">
+                      <span>Display Name</span>
+                      <input
+                        className="input"
+                        value={registerForm.displayName}
+                        onChange={(event) =>
+                          setRegisterForm((current) => ({
+                            ...current,
+                            displayName: event.target.value
+                          }))
+                        }
+                        autoComplete="name"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Email</span>
+                      <input
+                        className="input"
+                        value={registerForm.email}
+                        onChange={(event) =>
+                          setRegisterForm((current) => ({
+                            ...current,
+                            email: event.target.value
+                          }))
+                        }
+                        autoComplete="email"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Password</span>
+                      <input
+                        className="input"
+                        type="password"
+                        value={registerForm.password}
+                        onChange={(event) =>
+                          setRegisterForm((current) => ({
+                            ...current,
+                            password: event.target.value
+                          }))
+                        }
+                        autoComplete="new-password"
+                      />
+                    </label>
+                    <button
+                      className="button button--primary"
+                      type="submit"
+                      disabled={
+                        registerMutation.isPending ||
+                        registerForm.displayName.trim().length < 2 ||
+                        registerForm.email.trim().length === 0 ||
+                        registerForm.password.length < 8
+                      }
+                    >
+                      {registerMutation.isPending ? "Creating..." : "Create Account"}
+                    </button>
+                    {registerMutation.isError ? (
+                      <p className="form-message form-message--error">
+                        {(registerMutation.error as Error).message}
+                      </p>
+                    ) : null}
+                  </form>
+                )}
               </>
             ) : (
               <>

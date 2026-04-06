@@ -310,4 +310,90 @@ describe("App interactions", () => {
       );
     });
   });
+
+  it("lets a new user register and land in an empty workspace", async () => {
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+
+      if (url === "/api/health/live") {
+        return jsonResponse({
+          status: "ok",
+          timestamp: "2026-04-06T08:00:00.000Z"
+        });
+      }
+
+      if (url === "/api/auth/register") {
+        expect(init?.method).toBe("POST");
+
+        return jsonResponse({
+          accessToken: "register-access-token",
+          refreshToken: "register-refresh-token",
+          user: {
+            id: "user-9",
+            email: "new@taskflow.local",
+            displayName: "New User"
+          }
+        });
+      }
+
+      if (url === "/api/me") {
+        return jsonResponse({
+          id: "user-9",
+          email: "new@taskflow.local",
+          displayName: "New User",
+          createdAt: "2026-04-06T08:00:00.000Z",
+          updatedAt: "2026-04-06T08:00:00.000Z",
+          projects: []
+        });
+      }
+
+      if (url === "/api/projects") {
+        return jsonResponse([]);
+      }
+
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+
+    const user = userEvent.setup();
+    renderWithAppProviders(<App />);
+
+    await user.click(
+      await screen.findByRole("tab", {
+        name: "Create Account"
+      })
+    );
+    await user.type(
+      screen.getByRole("textbox", {
+        name: "Display Name"
+      }),
+      "New User"
+    );
+    await user.type(
+      screen.getByRole("textbox", {
+        name: "Email"
+      }),
+      "new@taskflow.local"
+    );
+    await user.type(screen.getByLabelText("Password"), "taskflow123");
+    await user.click(
+      screen.getByRole("button", {
+        name: "Create Account"
+      })
+    );
+
+    expect(
+      await screen.findByText(
+        "No projects yet for this account. Create one here to exercise the protected API end to end."
+      )
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/auth/register",
+        expect.objectContaining({
+          method: "POST"
+        })
+      );
+    });
+  });
 });
