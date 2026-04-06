@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+
+concurrency:
+  group: taskflow-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Activate pnpm
+        run: corepack prepare pnpm@10.17.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build workspace
+        run: pnpm build
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    needs: validate
+    env:
+      COMPOSE_PROJECT_NAME: taskflow-ci-${{ github.run_id }}
+      GHCR_OWNER: taskflow
+      IMAGE_TAG: local
+      POSTGRES_DB: taskflow
+      POSTGRES_USER: taskflow
+      POSTGRES_PASSWORD: taskflow
+      DATABASE_URL: postgresql://taskflow:taskflow@db:5432/taskflow?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: test-secret
+      REFRESH_TOKEN_SECRET: test-refresh-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start smoke stack
+        run: docker compose -f compose.yaml -f compose.ci.yaml up -d --build db redis api worker frontend
+
+      - name: Wait for API health
+        run: |
+          for attempt in {1..20}; do
+            if curl -fsS http://localhost:3000/api/health/live > /dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "API healthcheck failed" >&2
+          exit 1
+
+      - name: Wait for frontend
+        run: |
+          for attempt in {1..20}; do
+            if curl -fsS http://localhost:4173 > /dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Frontend healthcheck failed" >&2
+          exit 1
+
+      - name: Stop smoke stack
+        if: always()
+        run: docker compose -f compose.yaml -f compose.ci.yaml down -v

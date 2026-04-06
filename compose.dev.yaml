@@ -1,0 +1,94 @@
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      target: dev
+    command:
+      [
+        "sh",
+        "-c",
+        "corepack pnpm prisma generate --schema prisma/schema.prisma && corepack pnpm prisma migrate deploy --schema prisma/schema.prisma && corepack pnpm --filter @taskflow/api dev"
+      ]
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/workspace
+      - api-workspace-node-modules:/workspace/node_modules
+      - api-node-modules:/workspace/apps/api/node_modules
+      - api-shared-types-node-modules:/workspace/packages/shared-types/node_modules
+
+  worker:
+    build:
+      target: dev
+    command:
+      [
+        "sh",
+        "-c",
+        "corepack pnpm --filter @taskflow/worker dev"
+      ]
+    volumes:
+      - .:/workspace
+      - worker-workspace-node-modules:/workspace/node_modules
+      - worker-node-modules:/workspace/apps/worker/node_modules
+      - worker-shared-types-node-modules:/workspace/packages/shared-types/node_modules
+
+  frontend:
+    build:
+      target: dev
+    command:
+      [
+        "sh",
+        "-c",
+        "corepack pnpm --filter @taskflow/frontend dev --host 0.0.0.0 --port 5173"
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5173/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/workspace
+      - frontend-workspace-node-modules:/workspace/node_modules
+      - frontend-node-modules:/workspace/apps/frontend/node_modules
+      - frontend-shared-types-node-modules:/workspace/packages/shared-types/node_modules
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    profiles:
+      - tools
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    profiles:
+      - tools
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@taskflow.local
+      PGADMIN_DEFAULT_PASSWORD: taskflow
+    ports:
+      - "5050:80"
+
+volumes:
+  api-workspace-node-modules:
+  api-node-modules:
+  api-shared-types-node-modules:
+  worker-workspace-node-modules:
+  worker-node-modules:
+  worker-shared-types-node-modules:
+  frontend-workspace-node-modules:
+  frontend-node-modules:
+  frontend-shared-types-node-modules:

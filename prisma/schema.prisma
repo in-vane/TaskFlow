@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActivityAction {
+  CREATED
+  UPDATED
+  TASK_MOVED
+  COMMENTED
+  INVITED
+}
+
+model User {
+  id            String           @id @default(uuid())
+  email         String           @unique
+  passwordHash  String           @map("password_hash")
+  displayName   String           @map("display_name")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  ownedProjects Project[]        @relation("ProjectOwner")
+  memberships   ProjectMember[]
+  assignedTasks Task[]           @relation("TaskAssignee")
+  comments      TaskComment[]
+  refreshTokens RefreshToken[]
+  activities    ActivityLog[]    @relation("ActivityActor")
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  tokenHash  String    @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Project {
+  id          String          @id @default(uuid())
+  key         String          @unique
+  name        String
+  ownerId     String          @map("owner_id")
+  owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  memberships ProjectMember[]
+  boards      Board[]
+  tasks       Task[]
+  activities  ActivityLog[]
+  attachments Attachment[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  role      Role
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Board {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  name      String
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([projectId, position])
+  @@unique([projectId, position])
+  @@map("boards")
+}
+
+model Task {
+  id          String         @id @default(uuid())
+  projectId   String         @map("project_id")
+  boardId     String         @map("board_id")
+  title       String
+  description String?
+  status      TaskStatus     @default(TODO)
+  priority    TaskPriority   @default(MEDIUM)
+  assigneeId  String?        @map("assignee_id")
+  dueDate     DateTime?      @map("due_date")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  board       Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  assignee    User?          @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  comments    TaskComment[]
+  attachments Attachment[]
+  activities  ActivityLog[]
+
+  @@index([projectId, status])
+  @@index([boardId])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_comments")
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  projectId  String   @map("project_id")
+  taskId     String?  @map("task_id")
+  fileName   String   @map("file_name")
+  fileUrl    String   @map("file_url")
+  mimeType   String   @map("mime_type")
+  sizeBytes  Int      @map("size_bytes")
+  createdAt  DateTime @default(now()) @map("created_at")
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([taskId])
+  @@map("attachments")
+}
+
+model ActivityLog {
+  id        String         @id @default(uuid())
+  projectId String         @map("project_id")
+  taskId    String?        @map("task_id")
+  actorId   String?        @map("actor_id")
+  action    ActivityAction
+  metadata  Json?
+  createdAt DateTime       @default(now()) @map("created_at")
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  actor     User?          @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([taskId])
+  @@map("activity_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  channel   String
+  title     String
+  body      String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}

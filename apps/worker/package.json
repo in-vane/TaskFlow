@@ -1,0 +1,22 @@
+{
+  "name": "@taskflow/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@taskflow/shared-types": "workspace:*",
+    "bullmq": "^5.51.0",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}

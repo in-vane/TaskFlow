@@ -1,0 +1,21 @@
+services:
+  api:
+    build:
+      target: runner
+    environment:
+      NODE_ENV: test
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      target: runner
+    ports:
+      - "4173:80"
+
+  worker:
+    build:
+      target: runner
+    environment:
+      NODE_ENV: test
+

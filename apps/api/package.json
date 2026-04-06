@@ -1,0 +1,39 @@
+{
+  "name": "@taskflow/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --loader ts-node/esm src/main.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
+    "test": "corepack pnpm exec vitest run --config vitest.config.ts",
+    "test:watch": "corepack pnpm exec vitest --config vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/platform-express": "^11.0.1",
+    "@prisma/client": "^6.7.0",
+    "@taskflow/shared-types": "workspace:*",
+    "bcryptjs": "^3.0.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "ioredis": "^5.6.1",
+    "jose": "^6.0.11",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.18",
+    "@types/node": "^22.15.3",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,46 @@
+name: Deploy Staging
+
+on:
+  workflow_run:
+    workflows:
+      - Build and Publish Images
+    types:
+      - completed
+
+concurrency:
+  group: taskflow-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - name: Configure SSH key
+        run: |
+          install -m 600 /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.STAGING_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync deployment files
+        run: |
+          rsync -az \
+            compose.yaml \
+            compose.prod.yaml \
+            infra/ \
+            "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ secrets.STAGING_DEPLOY_PATH }}/"
+
+      - name: Deploy to staging
+        run: |
+          ssh "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" \
+            "cd '${{ secrets.STAGING_DEPLOY_PATH }}' && \
+            export GHCR_OWNER='${{ env.OWNER_LC }}' IMAGE_TAG='sha-${{ github.event.workflow_run.head_sha }}' && \
+            ./infra/scripts/deploy.sh"
+

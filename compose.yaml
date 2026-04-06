@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-taskflow}
+      POSTGRES_USER: ${POSTGRES_USER:-taskflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskflow}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-taskflow} -d ${POSTGRES_DB:-taskflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runner
+    image: ghcr.io/${GHCR_OWNER:-taskflow}/taskflow-api:${IMAGE_TAG:-local}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://taskflow:taskflow@db:5432/taskflow?schema=public}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-taskflow-dev-secret}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-taskflow-dev-refresh-secret}
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/health/live').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+      target: runner
+    image: ghcr.io/${GHCR_OWNER:-taskflow}/taskflow-worker:${IMAGE_TAG:-local}
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      NOTIFICATIONS_QUEUE: ${NOTIFICATIONS_QUEUE:-notifications}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      target: runner
+    image: ghcr.io/${GHCR_OWNER:-taskflow}/taskflow-frontend:${IMAGE_TAG:-local}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db-data:
+
